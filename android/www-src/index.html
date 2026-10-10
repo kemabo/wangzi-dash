@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#12141d" />
+<title>门店经营数据</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+<div class="progress" id="pg"><i></i></div>
+<div id="ptr">下拉刷新…</div>
+
+<header id="top">
+  <h1>王子鞋服<i>·</i>经营数据</h1>
+  <button class="iconbtn" id="btnRefresh" title="刷新">↻</button>
+  <button class="iconbtn" id="btnSetup" title="设置">⚙</button>
+</header>
+
+<div class="chips" id="ranges"></div>
+<div class="chips store" id="storeChips"></div>
+
+<main id="main">
+  <section class="hero" id="hero">
+    <div class="lab" id="heroLab">今日实时销售额</div>
+    <div class="big" id="heroSale">--</div>
+    <div class="sub">
+      <span>毛利 <b id="heroProfit">--</b></span>
+      <span>毛利率 <b id="heroRate">--</b></span>
+      <span>数量 <b id="heroQty">--</b></span>
+    </div>
+    <div class="upd" id="heroUpd"></div>
+  </section>
+
+  <div class="grid4">
+    <div class="card accent"><div class="k">客流（人次）</div><div class="v" id="kCust">--</div><div class="x" id="kCustX">仅今日实时有</div></div>
+    <div class="card accent"><div class="k">客单价（元）</div><div class="v" id="kAvg">--</div><div class="x" id="kAvgX">销售额 ÷ 客流</div></div>
+    <div class="card good"><div class="k">库存数量</div><div class="v" id="kStockQ">--</div><div class="x" id="kStockQX">全部门店合计</div></div>
+    <div class="card good"><div class="k">库存成本（元）</div><div class="v" id="kStockC">--</div><div class="x" id="kStockCX">按成本价</div></div>
+  </div>
+
+  <div id="errBox"></div>
+  <div class="guard" id="guardBox" style="display:none"></div>
+
+  <!-- 每一块是一个独立模块，点标题可折叠 -->
+  <section class="mod m-store">
+    <div class="mod-hd" data-fold="store"><b>门店销售排行</b>
+      <span class="cnt" id="storeCount"></span><i class="ar">▾</i></div>
+    <div class="mod-bd"><div class="card" id="storeBars"></div></div>
+  </section>
+
+  <section class="mod m-cat">
+    <div class="mod-hd" data-fold="cat"><b>大类销售与库存</b>
+      <span class="cnt" id="catCount"></span><i class="ar">▾</i></div>
+    <div class="mod-bd">
+      <div class="seg" id="catTabs">
+        <div class="sg-i on" data-cat="sale">大类销售</div>
+        <div class="sg-i" data-cat="mix">销售与库存对照</div>
+      </div>
+      <div class="card" id="catBody"></div>
+    </div>
+  </section>
+
+  <!-- 季节表要按商品档案逐条归类，默认只算销售（快）；库存另行点按钮统计 -->
+  <section class="mod m-sea" id="secSea">
+    <div class="mod-hd" data-fold="sea"><b>季节销售与库存</b>
+      <span class="cnt" id="seaCount"></span><i class="ar">▾</i></div>
+    <div class="mod-bd">
+      <div class="hd-sub"><span id="seaTip">按商品档案季节归类</span></div>
+      <div class="btnrow">
+        <button class="btn ghost sm" id="btnSeason">统计季节销售</button>
+        <button class="btn ghost sm" id="btnSeasonStock">含库存统计（较慢）</button>
+      </div>
+      <div class="sea-sum" id="seaSum"></div>
+      <div class="sea-box" id="seaTable"><div class="empty">季节数据未加载</div></div>
+    </div>
+  </section>
+
+  <section class="mod m-trend" id="secTrend">
+    <div class="mod-hd" data-fold="trend"><b>销售趋势</b>
+      <span class="cnt" id="trendCount"></span><i class="ar">▾</i></div>
+    <div class="mod-bd" id="trendWrap">
+      <div class="seg" id="trendTabs">
+        <div class="sg-i on" data-tr="week">本周</div>
+        <div class="sg-i" data-tr="month">本月</div>
+        <div class="sg-i" data-tr="year">本年</div>
+      </div>
+      <div class="card" id="trendBars"></div>
+    </div>
+  </section>
+
+  <div class="empty" id="empty" style="display:none">还没有数据，下拉或点右上角 ↻ 刷新</div>
+</main>
+
+<!-- 设置：账号管理 -->
+<div class="mask" id="setupMask">
+  <div class="sheet">
+    <h3>门店账号</h3>
+    <div id="acctList"></div>
+    <div id="acctForm" style="display:none">
+      <div class="field"><label>显示名（随便起，例如：闪电仓）</label><input id="fAlias" placeholder="门店名称" /></div>
+      <div class="field"><label>商户ID（思迅后台 8 位编号）</label><input id="fCode" inputmode="numeric" placeholder="例如 68548362" /></div>
+      <div class="field"><label>登录账号</label><input id="fUser" value="9999" /></div>
+      <div class="field"><label>密码</label><input id="fPass" type="password" /></div>
+      <button class="btn" id="btnTest">测试连接并保存</button>
+      <button class="btn ghost" id="btnCancelForm">取消</button>
+    </div>
+    <button class="btn ghost" id="btnAdd" style="margin-top:10px">+ 添加门店账号</button>
+
+    <!-- 门店配置的导入 / 导出：新增门店不必等新版本 App，导出那段文本粘给别的手机即可 -->
+    <div class="btnrow">
+      <button class="btn ghost sm" id="btnImport">粘贴导入配置</button>
+      <button class="btn ghost sm" id="btnExport">导出 / 分享配置</button>
+    </div>
+    <div id="ioBox" style="display:none">
+      <textarea id="ioText" class="ta" rows="5" spellcheck="false" placeholder="把配置文本粘到这里，再点「导入」"></textarea>
+      <label class="ck"><input type="checkbox" id="ioWithPwd" /> 导出的内容里包含密码（只发给自己的手机时才勾）</label>
+      <div class="btnrow">
+        <button class="btn sm" id="btnDoImport">导入</button>
+        <button class="btn sm ghost" id="btnCopyIO">复制</button>
+      </div>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label>界面风格</label>
+      <select id="fTheme">
+        <option value="dark">深色（默认）</option>
+        <option value="light">浅色</option>
+      </select>
+    </div>
+    <div class="tip" id="setupTip">
+      账号只保存在这台手机里。App 直接向思迅云取数（和思迅官方 App 同一套登录与签名），
+      不经过局域网里的大屏电脑，也不需要我们自己的服务器。
+    </div>
+    <div class="tip" style="margin-top:10px">版本 <span id="ver">1.6.0</span> · 直连思迅云取数</div>
+    <button class="btn ghost" id="btnCloseSetup">关闭</button>
+  </div>
+</div>
+
+<script src="presets.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

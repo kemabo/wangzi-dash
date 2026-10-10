@@ -1,0 +1,16 @@
+# 绝不入库：含门店账号密码 / 运行数据 / 大文件
+config.json
+**/config.json
+data/
+**/data/
+*.exe
+*.zip
+发布包/
+**/发布包/
+**/out/
+**/assets/www/
+**/release.keystore
+**/*.log
+运行日志.txt
+可选-*含密码*
+!王子鞋服经营数据-Android-*.apk
