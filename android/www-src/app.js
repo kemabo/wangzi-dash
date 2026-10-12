@@ -31,6 +31,8 @@
     trendTab: 'week',      // 趋势：week 本周 / month 本月 / year 本年
     trend: null, trendLoading: false,
     season: null, seasonLoading: false, seasonStatus: '', seasonErr: '', seasonOn: false,
+    vendor: null, vendorLoading: false, vendorStatus: '', vendorErr: '', vendorTab: 'today',
+    vendorOpen: {}, vendorMore: {},   // 大类展开 / 「展开全部供应商」
     fold: {},       // 模块折叠：{store:true,...}
     trPath: '',      // 趋势下钻路径：'week:2026-09-28>day:2026-09-30' 这样用 > 串起来
   };
@@ -196,6 +198,7 @@
     renderCategory();
     renderTrend();
     renderSeason();
+    renderVendor();
 
     // 错误提示
     const errs = v.errors || [];
@@ -643,6 +646,112 @@
     renderSeason();
   }
 
+  // ---------- 大类 × 供应商 ----------
+  const VENDOR_TTL = { today: 30 * 60 * 1000, _: 6 * 3600 * 1000 };
+  const VENDOR_LABEL = { today: '本日', thisWeek: '本周', thisYear: '本年' };
+  const VENDOR_TOP = 8;
+
+  function vendorKey() { return 'dm.vendor.' + S.store + '.' + S.vendorTab; }
+
+  async function loadVendor(force) {
+    if (S.vendorLoading) return;
+    if (guardBlocked()) { renderVendor(); return; }
+    const key = vendorKey();
+    const cached = load(key, null);
+    const ttl = VENDOR_TTL[S.vendorTab] || VENDOR_TTL._;
+    if (!force && cached && Date.now() - cached.updatedAt < ttl) { S.vendor = cached; renderVendor(); return; }
+    const all = accounts().filter(a => a.password);
+    const accts = S.store === 'all' ? all : all.filter(a => String(a.tenantCode) === String(S.store));
+    if (!accts.length) { renderVendor(); return; }
+    S.vendorLoading = true; S.vendorErr = '';
+    const t0 = Date.now();
+    const tick = (m) => { S.vendorStatus = m + ' · 已用 ' + Math.round((Date.now() - t0) / 1000) + 's'; renderVendor(); };
+    tick('准备中');
+    try {
+      const snaps = snapshots();
+      const out = [];
+      let i = 0;
+      for (const a of accts) {
+        i++;
+        const tag = '(' + i + '/' + accts.length + ') ' + (a.alias || a.tenantCode) + ' ';
+        try {
+          const r = await window.DashCore.collectVendor(
+            Object.assign({}, a, { snapshot: snaps[a.tenantCode] || null }),
+            S.vendorTab, (s) => tick(tag + s));
+          if (r && r.snapshot) { snaps[a.tenantCode] = r.snapshot; save(K.snap, snaps); }
+          out.push(r);
+        } catch (e) {
+          out.push({ tenantCode: a.tenantCode, alias: a.alias, ok: false, error: String(e.message || e) });
+        }
+      }
+      const built = window.DashCore.buildVendor(out);
+      S.vendorErr = built.okCount ? '' : (built.errors || []).join('；');
+      // 全店失败就别把空表盖掉旧数据（跟主快照一个规矩）
+      if (built.okCount || !cached) { S.vendor = built; save(key, built); }
+      else S.vendor = cached;
+    } catch (e) {
+      S.vendor = cached || S.vendor;
+      S.vendorErr = String((e && e.message) || e);
+    }
+    S.vendorLoading = false; S.vendorStatus = '';
+    renderVendor();
+  }
+
+  function renderVendor() {
+    const box = $('vendorTable');
+    if (!box) return;
+    const btn = $('btnVendor');
+    if (btn) btn.textContent = S.vendorLoading ? '统计中…' : (S.vendor ? '重新统计' : '统计供应商排名');
+    for (const el of document.querySelectorAll('#vendorTabs .sg-i')) {
+      el.classList.toggle('on', el.getAttribute('data-vr') === S.vendorTab);
+    }
+    const tip = $('vendorTip');
+    const cnt = $('vendorCount');
+    if (S.vendorLoading) {
+      tip.textContent = S.vendorStatus || '统计中…';
+      box.innerHTML = '<div class="empty sm">正在按商品档案归类供应商（首次较慢，之后用本机缓存）…</div>';
+      return;
+    }
+    const d = S.vendor;
+    if (!d || !(d.groups || []).length) {
+      tip.textContent = S.vendorErr ? ('失败：' + S.vendorErr) : '按商品档案里的供应商归类';
+      if (cnt) cnt.textContent = '';
+      box.innerHTML = '<div class="empty sm">' + (S.vendorErr ? esc(S.vendorErr) : '点上面按钮统计（首次较慢，之后用本机缓存）') + '</div>';
+      return;
+    }
+    if (cnt) cnt.textContent = d.groups.length + ' 个大类';
+    tip.textContent = VENDOR_LABEL[S.vendorTab] + ' · 更新 ' + timeStr(d.updatedAt);
+    const open = S.vendorOpen || (S.vendorOpen = {});
+    if (!d.groups.some(g => open[g.name])) open[d.groups[0].name] = 1;
+
+    const rows = [];
+    for (const g of d.groups) {
+      const isOpen = !!open[g.name];
+      rows.push('<div class="vg' + (isOpen ? ' open' : '') + '" data-vg="' + esc(g.name) + '">'
+        + '<i class="car">' + (isOpen ? '▾' : '▸') + '</i><span class="nm">' + esc(g.name) + '</span>'
+        + '<span class="vv2">¥' + money(g.sale) + '</span>'
+        + '<span class="vq">' + int(g.qty) + ' 件</span>'
+        + '<span class="vs">存 ' + int(g.stockQty) + '</span></div>');
+      if (!isOpen) continue;
+      const list = g.vendors || [];
+      const showAll = !!(S.vendorMore || (S.vendorMore = {}))[g.name];
+      const shown = showAll ? list : list.slice(0, VENDOR_TOP);
+      shown.forEach((v, i) => {
+        rows.push('<div class="vv-row"><span class="rk">' + (i + 1) + '</span>'
+          + '<span class="nm">' + esc(v.name) + '</span>'
+          + '<span class="vv2">¥' + money(v.sale) + '</span>'
+          + '<span class="vq">' + int(v.qty) + ' 件</span>'
+          + '<span class="vs">存 ' + int(v.stockQty) + '</span></div>');
+      });
+      if (list.length > VENDOR_TOP) {
+        rows.push('<div class="vmore" data-vmore="' + esc(g.name) + '">'
+          + (showAll ? '收起（只看前 ' + VENDOR_TOP + ' 名）' : '展开全部 ' + list.length + ' 家') + '</div>');
+      }
+      if (!list.length) rows.push('<div class="vv-row"><span class="nm">本档位没有销售</span></div>');
+    }
+    box.innerHTML = rows.join('');
+  }
+
   function renderChips() {
     $('ranges').innerHTML = RANGES.map(r =>
       '<div class="chip' + (r.key === S.range ? ' on' : '') + '" data-range="' + r.key + '">' + r.name + '</div>').join('');
@@ -1084,6 +1193,31 @@
     // 季节：默认只统计销售（快）；库存单独点，统计一次缓存 12 小时
     $('btnSeason').onclick = () => { S.seasonOn = true; save(K.seasonTab, true); loadSeason(true, false); };
     $('btnSeasonStock').onclick = () => { S.seasonOn = true; save(K.seasonTab, true); loadSeason(true, true); };
+    // 供应商榜：按商品档案归类，默认只算销售 + 库存一起（库存有 12 小时缓存）
+    $('btnVendor').onclick = () => loadVendor(true);
+    $('vendorTabs').onclick = (e) => {
+      const el = e.target.closest('[data-vr]'); if (!el) return;
+      S.vendorTab = el.getAttribute('data-vr');
+      S.vendorOpen = {}; S.vendorMore = {};
+      renderVendor();
+      loadVendor(false);
+    };
+    $('vendorTable').onclick = (e) => {
+      const g = e.target.closest('[data-vg]');
+      if (g) {
+        const n = g.getAttribute('data-vg');
+        S.vendorOpen = S.vendorOpen || {};
+        if (S.vendorOpen[n]) delete S.vendorOpen[n]; else S.vendorOpen[n] = 1;
+        renderVendor(); return;
+      }
+      const m = e.target.closest('[data-vmore]');
+      if (m) {
+        const n = m.getAttribute('data-vmore');
+        S.vendorMore = S.vendorMore || {};
+        if (S.vendorMore[n]) delete S.vendorMore[n]; else S.vendorMore[n] = 1;
+        renderVendor();
+      }
+    };
     $('storeChips').onclick = (e) => {
       const el = e.target.closest('[data-store]'); if (!el) return;
       const key = el.getAttribute('data-store');
@@ -1092,6 +1226,8 @@
       if (a && !a.password) { openSetupFor(key); return; }
       S.store = key; save(K.store, key);
       S.trPath = '';
+      // 供应商榜是按门店单独统计的，换店要换一份（本地有缓存就秒出）
+      S.vendor = load(vendorKey(), null); S.vendorOpen = {}; S.vendorMore = {};
       renderChips(); render();
     };
     // 手动刷新时也补一次季节（下拉刷新走 refresh() 里的自动补齐）

@@ -392,6 +392,7 @@
       case 'yesterday': { const y = new Date(today); y.setDate(y.getDate() - 1); return wrap(y, y, '昨天'); }
       case 'thisWeek': { const x = new Date(today); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return wrap(x, today, '本周'); }
       case 'thisMonth': return wrap(new Date(today.getFullYear(), today.getMonth(), 1), today, '本月');
+      case 'thisYear': return wrap(new Date(today.getFullYear(), 0, 1), today, '本年');
       case 'lastMonth': return wrap(new Date(today.getFullYear(), today.getMonth() - 1, 1), new Date(today.getFullYear(), today.getMonth(), 0), '上月');
       default: return wrap(today, today, '今日实时');
     }
@@ -866,7 +867,7 @@
   // 季节表从「每次 1～3 分钟」变成「几秒钟」（官方 App 也是每类请求都带本地缓存的思路）。
   const SEASON_IDX_TTL = 24 * 3600e3;
   function buildSeasonIndex(archive, styles) {
-    const season = {}, self = {}, catc = {}, catn = {};
+    const season = {}, self = {}, catc = {}, catn = {}, vendor = {};
     for (const [code, a] of archive) {
       let s = '';
       if (a.styleId && styles.byId.get(a.styleId)) s = styles.byId.get(a.styleId);
@@ -876,13 +877,15 @@
       // 类别优先存**名字**：档案只给 CategoryId（数字主键），名字反而能反查到大类
       if (a.categoryName) catn[code] = a.categoryName;
       else if (a.categoryCode) catc[code] = a.categoryCode;
+      if (a.vendor) vendor[code] = a.vendor;
     }
-    return { season, self, catc, catn, count: archive.size };
+    return { season, self, catc, catn, vendor, count: archive.size };
   }
   /** 取（或复用）季节索引；返回 { season, self, catc, catn, fresh } */
   async function fetchSeasonIndex(ts, onStep) {
     const step = onStep || function () { };
-    const key = 'sx:' + ts.acct.tenantCode;
+    // 索引里新增了「供应商」，键换成 sx2: 让旧缓存自然失效（旧的那份没有 vendor 字段）
+    const key = 'sx2:' + ts.acct.tenantCode;
     const hit = cacheGet(key, SEASON_IDX_TTL);
     if (hit && hit.season && hit.count) { step('用本机季节档案'); return Object.assign({ fresh: false }, hit); }
     step('读取商品档案（首次较慢，之后本机缓存）');
@@ -958,6 +961,8 @@
         // 别把 CategoryId 当编码用（会反查不到大类，整类掉进「其他」）
         categoryCode: String(r.CategoryCode || '').trim(),
         categoryName: String(r.CategoryName || '').trim(),
+        // 供应商：思迅叫 Vendor，商品档案自带（供应商档案接口不存在）
+        vendor: String(r.VendorName || '').trim(),
       });
     }
     return m;
@@ -1225,6 +1230,107 @@
   }
 
   /** 多个商户的季节汇总合并：一个大类一行组，格子里同时留着各家门店的数（切店时用） */
+  // ---------------------------------------------------------------------------
+  // 大类 × 供应商：每个大类下面各供应商的销量 / 销售额 / 库存
+  // 与季节表同一套取数（商品档案索引 + 商品级销售 + 商品级库存），
+  // 区别只在「按什么分组」：季节按季节，这里按商品档案里的 VendorName。
+  // ---------------------------------------------------------------------------
+  const VENDOR_NONE = '未填供应商';
+
+  async function collectVendor(acct, rangeKey, onStep, opts) {
+    const step = onStep || function () { };
+    const ts = new Session(acct);
+    const range = rangeOf(rangeKey);
+    const out = { tenantCode: acct.tenantCode, alias: acct.alias || acct.tenantCode, ok: false, error: '', groups: [] };
+    try {
+      await ts.ensure();
+      step('读取类别');
+      const catMap = await fetchCategories(ts);
+      const idx = await fetchSeasonIndex(ts, step);      // 含 vendor（商品 → 供应商）
+      step('读取商品级销售');
+      const saleRows = await fetchSeasonSale(ts, range);
+      let stockRows = [];
+      if (!(opts && opts.withStock === false)) {
+        // 库存与档位无关，按门店缓存 12 小时：切本日/本周/年都不会再等一次
+        const skey = 'ssv:' + String(acct.tenantCode);
+        const hit = cacheGet(skey, SEASON_STOCK_TTL);
+        if (hit && hit.length) { step('用本机库存'); stockRows = hit; }
+        else {
+          step('读取商品级库存（首次较慢）');
+          const raw = await fetchSeasonStock(ts);
+          stockRows = raw.map(mapStockRow);
+          if (stockRows.length && !raw.incomplete) cacheSet(skey, stockRows);
+        }
+      }
+      step('汇总供应商');
+
+      const archive = {
+        get: (code) => {
+          const c = idx.catc[code], n = idx.catn[code];
+          return (c || n) ? { categoryCode: c || '', categoryName: n || '' } : null;
+        },
+      };
+      const groupOf = makeGroupResolver(catMap, archive);
+      const vendorOf = (code) => (code && idx.vendor[code]) || VENDOR_NONE;
+
+      const gmap = new Map();
+      const slotG = (name) => {
+        let g = gmap.get(name);
+        if (!g) { g = { name, sale: 0, qty: 0, stockQty: 0, stockCost: 0, vendors: new Map() }; gmap.set(name, g); }
+        return g;
+      };
+      const slotV = (g, name) => {
+        let v = g.vendors.get(name);
+        if (!v) { v = { name, sale: 0, qty: 0, stockQty: 0, stockCost: 0 }; g.vendors.set(name, v); }
+        return v;
+      };
+      for (const r of saleRows) {
+        const g = slotG(groupOf(r)); g.sale += r.saleAmount; g.qty += r.saleQty;
+        const v = slotV(g, vendorOf(r.itemCode)); v.sale += r.saleAmount; v.qty += r.saleQty;
+      }
+      for (const r of stockRows) {
+        const g = slotG(groupOf(r)); g.stockQty += r.stockQty; g.stockCost += r.stockCost;
+        const v = slotV(g, vendorOf(r.itemCode)); v.stockQty += r.stockQty; v.stockCost += r.stockCost;
+      }
+      // 「未填供应商」是兜底桶（档案没维护供应商），排到最后，别占榜首
+      const vSort = (a, b) => (a.name === VENDOR_NONE ? 1 : 0) - (b.name === VENDOR_NONE ? 1 : 0)
+        || b.sale - a.sale || b.qty - a.qty;
+      out.groups = [...gmap.values()].map(g => Object.assign({}, g, {
+        vendors: [...g.vendors.values()].sort(vSort),
+      })).sort((a, b) => b.sale - a.sale);
+      out.ok = true;
+    } catch (e) { out.error = String(e.message || e); }
+    return out;
+  }
+
+  /** 多家门店合并（与 buildSeason 同一套：同名大类合并、供应商同名合并） */
+  function buildVendor(results) {
+    const m = new Map();
+    let okCount = 0; const errors = [];
+    for (const r of results || []) {
+      if (!r || !r.ok) { if (r && r.error) errors.push((r.alias || r.tenantCode) + '：' + r.error); continue; }
+      okCount++;
+      for (const g of r.groups) {
+        let t = m.get(g.name);
+        if (!t) { t = { name: g.name, sale: 0, qty: 0, stockQty: 0, stockCost: 0, vendors: new Map() }; m.set(g.name, t); }
+        t.sale += g.sale; t.qty += g.qty; t.stockQty += g.stockQty; t.stockCost += g.stockCost;
+        for (const v of g.vendors) {
+          let tv = t.vendors.get(v.name);
+          if (!tv) { tv = { name: v.name, sale: 0, qty: 0, stockQty: 0, stockCost: 0 }; t.vendors.set(v.name, tv); }
+          tv.sale += v.sale; tv.qty += v.qty; tv.stockQty += v.stockQty; tv.stockCost += v.stockCost;
+        }
+      }
+    }
+    return {
+      okCount, allCount: (results || []).length, errors, updatedAt: Date.now(),
+      groups: [...m.values()].map(g => Object.assign({}, g, {
+        vendorCount: g.vendors.size,
+        vendors: [...g.vendors.values()].sort((a, b) => (a.name === VENDOR_NONE ? 1 : 0) - (b.name === VENDOR_NONE ? 1 : 0)
+          || b.sale - a.sale || b.qty - a.qty),
+      })).sort((a, b) => b.sale - a.sale),
+    };
+  }
+
   function buildSeason(results) {
     const okList = (results || []).filter(r => r && r.ok);
     const errors = (results || []).filter(r => r && !r.ok)
@@ -1336,6 +1442,7 @@
     _trip: trip,               // 仅供调试：模拟一次厂家限流，验证保护提示
     Session, parseGrid, num, levelOf,
     collectSeason, buildSeason, viewSeason, SEASON_LABELS, SEASON_ORDER,
+    collectVendor, buildVendor,
     fetchItemArchive,            // 诊断用：测商品档案拉取耗时/条数
   };
 })(typeof window !== 'undefined' ? window : globalThis);

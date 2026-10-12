@@ -76,6 +76,24 @@
     </div>
   </section>
 
+  <!-- 大类 × 供应商：行是大类（男装/女装…），点开看这个大类里各供应商的销量与库存 -->
+  <section class="mod m-vendor" id="secVendor">
+    <div class="mod-hd" data-fold="vendor"><b>大类供应商销售排名</b>
+      <span class="cnt" id="vendorCount"></span><i class="ar">▾</i></div>
+    <div class="mod-bd">
+      <div class="hd-sub"><span id="vendorTip">按商品档案里的供应商归类</span></div>
+      <div class="seg" id="vendorTabs">
+        <div class="sg-i on" data-vr="today">本日</div>
+        <div class="sg-i" data-vr="thisWeek">本周</div>
+        <div class="sg-i" data-vr="thisYear">本年</div>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost sm" id="btnVendor">统计供应商排名</button>
+      </div>
+      <div class="vend-box" id="vendorTable"><div class="empty">点上面按钮统计（首次较慢，之后用本机缓存）</div></div>
+    </div>
+  </section>
+
   <section class="mod m-trend" id="secTrend">
     <div class="mod-hd" data-fold="trend"><b>销售趋势</b>
       <span class="cnt" id="trendCount"></span><i class="ar">▾</i></div>
@@ -131,7 +149,7 @@
       账号只保存在这台手机里。App 直接向思迅云取数（和思迅官方 App 同一套登录与签名），
       不经过局域网里的大屏电脑，也不需要我们自己的服务器。
     </div>
-    <div class="tip" style="margin-top:10px">版本 <span id="ver">1.6.0</span> · 直连思迅云取数</div>
+    <div class="tip" style="margin-top:10px">版本 <span id="ver">1.6.1</span> · 直连思迅云取数</div>
     <button class="btn ghost" id="btnCloseSetup">关闭</button>
   </div>
 </div>
