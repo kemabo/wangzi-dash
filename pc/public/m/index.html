@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0e1420" />
+<title>王子鞋服 · 经营数据</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+
+<!-- ================= 登录页：门店账号（登录谁看谁） ================= -->
+<section id="loginPage" class="page on">
+  <div class="lg-hd">
+    <h1>王子鞋服<i>·</i>经营数据</h1>
+    <p class="lg-sub">登录哪家门店的账号，就看哪家的数据；全部登录后可看「全部门店」</p>
+  </div>
+  <div class="lg-list" id="acctList"></div>
+  <div class="lg-add">
+    <button class="btn ghost sm" id="btnAddAcct">+ 添加门店账号</button>
+    <button class="btn ghost sm" id="btnSamePwd">同密码登其余</button>
+  </div>
+  <div class="lg-bar" id="loginBar"></div>
+  <button class="btn primary big" id="btnEnter">进入数据</button>
+  <div class="lg-tip">账号与密码只保存在这台手机，App 直接向零售云平台云取数（与零售云平台官方 App 同一套登录），不经过我们自己的服务器。</div>
+  <div class="lg-ver" id="loginVer"></div>
+</section>
+
+<!-- ================= 主界面 ================= -->
+<section id="mainPage" class="page">
+  <div class="top">
+    <div class="top-r1">
+      <span class="ttl" id="topStore">全部门店</span>
+      <span class="sp"></span>
+      <span class="upd" id="topUpd"></span>
+      <button class="ibtn" id="btnRefresh" title="刷新">↻</button>
+      <button class="ibtn" id="btnAcct" title="门店账号">🏪</button>
+      <button class="ibtn" id="btnSetup" title="设置">⚙</button>
+    </div>
+    <div class="chips" id="storeChips"></div>
+    <div class="chips" id="rangeChips"></div>
+    <div class="pg" id="pg"><i></i></div>
+  </div>
+
+  <main id="main">
+    <section class="hero">
+      <div class="hero-l"><span class="lab" id="heroLab">今日销售额</span><span class="big" id="heroSale">--</span></div>
+      <div class="hero-r">
+        <div><span>毛利</span><b id="heroProfit">--</b></div>
+        <div><span>毛利率</span><b id="heroRate">--</b></div>
+        <div><span>销量</span><b id="heroQty">--</b></div>
+        <div><span>库存</span><b id="heroStock">--</b></div>
+      </div>
+    </section>
+
+    <div class="grid4">
+      <div class="m"><span class="k">客流</span><span class="v" id="kCust">--</span></div>
+      <div class="m"><span class="k">客单价</span><span class="v" id="kAvg">--</span></div>
+      <div class="m"><span class="k">库存成本</span><span class="v" id="kStockC">--</span></div>
+      <div class="m"><span class="k">单据/件</span><span class="v" id="kMisc">--</span></div>
+    </div>
+
+    <div id="errBox"></div>
+    <div class="guard" id="guardBox" style="display:none"></div>
+
+    <section class="mod" data-mod="store">
+      <div class="mod-hd"><b>门店排行</b><span class="cnt" id="storeCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd"><div class="box" id="storeBars"></div></div>
+    </section>
+
+    <section class="mod" data-mod="cat">
+      <div class="mod-hd"><b>大类销售与库存</b><span class="cnt" id="catCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd">
+        <div class="seg" id="catTabs">
+          <div class="sg-i on" data-cat="sale">销售</div>
+          <div class="sg-i" data-cat="mix">销售+库存</div>
+          <div class="sg-i" data-cat="stock">库存</div>
+        </div>
+        <div class="box" id="catBody"></div>
+      </div>
+    </section>
+
+    <section class="mod" data-mod="item">
+      <div class="mod-hd"><b>商品销量榜</b><span class="cnt" id="itemCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd"><div class="box" id="itemBody"></div></div>
+    </section>
+
+    <section class="mod" data-mod="hour">
+      <div class="mod-hd"><b>今日分小时</b><span class="cnt" id="hourCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd"><div class="box" id="hourBody"></div></div>
+    </section>
+
+    <section class="mod" data-mod="sea">
+      <div class="mod-hd"><b>季节销售与库存</b><span class="cnt" id="seaCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd">
+        <div class="btnrow"><button class="btn ghost sm" id="btnSeason">统计季节</button><button class="btn ghost sm" id="btnSeasonStock">含库存（慢）</button></div>
+        <div class="sea-sum" id="seaSum"></div>
+        <div class="box" id="seaTable"><div class="empty">点上面按钮统计（首次较慢，之后用本机缓存）</div></div>
+      </div>
+    </section>
+
+    <section class="mod" data-mod="vendor">
+      <div class="mod-hd"><b>大类供应商排名</b><span class="cnt" id="vendorCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd">
+        <div class="seg" id="vendorTabs">
+          <div class="sg-i on" data-vr="today">本日</div>
+          <div class="sg-i" data-vr="thisWeek">本周</div>
+          <div class="sg-i" data-vr="thisYear">本年</div>
+        </div>
+        <div class="btnrow"><button class="btn ghost sm" id="btnVendor">统计供应商</button></div>
+        <div class="box" id="vendorTable"><div class="empty">点上面按钮统计</div></div>
+      </div>
+    </section>
+
+    <section class="mod" data-mod="trend">
+      <div class="mod-hd"><b>销售趋势</b><span class="cnt" id="trendCount"></span><i class="ar">▾</i></div>
+      <div class="mod-bd">
+        <div class="seg" id="trendTabs">
+          <div class="sg-i on" data-tr="week">本周</div>
+          <div class="sg-i" data-tr="month">本月</div>
+          <div class="sg-i" data-tr="year">本年</div>
+        </div>
+        <div class="box" id="trendBars"></div>
+      </div>
+    </section>
+
+    <div class="empty" id="empty" style="display:none">还没有数据，点右上角 ↻ 刷新</div>
+  </main>
+</section>
+
+<!-- ================= 设置 ================= -->
+<div class="mask" id="setupMask">
+  <div class="sheet">
+    <h3>设置</h3>
+    <div class="field"><label>界面风格</label>
+      <select id="fTheme"><option value="dark">深色（默认）</option><option value="light">浅色</option></select>
+    </div>
+    <div class="field"><label>取数并发（越大越快，越容易触发厂家限流）</label>
+      <select id="fRate"><option value="6">标准（推荐）</option><option value="10">较快</option><option value="4">保守</option></select>
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost sm" id="btnExport">导出配置</button>
+      <button class="btn ghost sm" id="btnImport">粘贴导入</button>
+    </div>
+    <div id="ioBox" style="display:none">
+      <textarea id="ioText" class="ta" rows="4" spellcheck="false" placeholder="把配置文本粘到这里，再点「导入」"></textarea>
+      <label class="ck"><input type="checkbox" id="ioWithPwd" /> 导出内容包含密码（只发给自己手机时才勾）</label>
+      <div class="btnrow"><button class="btn sm" id="btnDoImport">导入</button><button class="btn sm ghost" id="btnCopyIO">复制</button></div>
+    </div>
+    <div class="tip" id="setupTip"></div>
+    <div class="tip">版本 <span id="ver">1.7.0</span> · 直连零售云平台云取数</div>
+    <button class="btn ghost" id="btnCloseSetup">关闭</button>
+  </div>
+</div>
+
+<script src="presets.js"></script>
+<script src="sample-data.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

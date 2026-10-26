@@ -1,0 +1,11 @@
+{
+  "name": "wangzi-dash",
+  "version": "1.2.0",
+  "private": true,
+  "description": "门店经营数据大屏（零第三方依赖，Node 原生 http + SEA 单文件打包）",
+  "main": "server.js",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
+  }
+}

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>王子鞋服经营数据大屏</title>
+<link rel="icon" href="/favicon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- 大屏底图：可由用户在「界面设置」里更换或上传 -->
+<div id="bgLayer"></div>
+
+<!-- 启动遮罩：双击 exe 后立即显示，避免长时间空白看起来像没反应 -->
+<div id="boot">
+  <div class="logo"><img src="/logo.png" alt="王子鞋服" /></div>
+  <div class="step" id="bootStep">正在启动服务…</div>
+  <div class="bar-out"><div class="bar-in" id="bootBar"></div></div>
+  <div class="hint" id="bootHint">首次启动需要登录 3 个门店后台并抓取销售、库存数据，通常需要 1～3 分钟。数据就绪后本页会自动进入大屏。</div>
+</div>
+
+<div class="wrap">
+
+  <div class="hd">
+    <div>
+      <img class="hd-logo" src="/logo.png" alt="王子鞋服" />
+      <h1>王子鞋服经营数据大屏</h1>
+      <div class="sub" id="subTitle">加载中…</div>
+    </div>
+    <div class="hd-spacer"></div>
+    <div class="clock">
+      <span id="clockTime">--:--:--</span>
+      <small id="clockDate">--</small>
+    </div>
+    <div class="tabs" id="rangeTabs">
+      <button data-r="today" class="on">实时（今日）</button>
+      <button data-r="yesterday">昨天</button>
+      <button data-r="thisWeek">本周</button>
+      <button data-r="thisMonth">本月</button>
+      <button data-r="lastMonth">上月</button>
+    </div>
+    <div class="status" id="statusBox">
+      <i class="dot" id="dot"></i><span id="statusTxt">初始化…</span>
+    </div>
+    <select id="hdrStore" class="sel" title="查看范围：总部看全部，单店只看自己"></select>
+    <button class="btn" id="btnAuth">登录</button>
+    <button class="btn" id="btnEntries">门店入口</button>
+    <button class="btn" id="btnUi">界面设置</button>
+    <button class="btn" id="btnRefresh">立即刷新</button>
+  </div>
+
+  <div class="main">
+
+    <!-- 左列 -->
+    <div class="col">
+      <!-- 第一行最大：全门店销售总览 -->
+      <div class="card">
+        <h2>全门店销售总览 <span class="tip" id="rangeTip"></span></h2>
+        <div class="big">
+          <div>
+            <div class="big-label">销售额（元）</div>
+            <div class="big-num"><span class="cur">¥</span><span id="kTotal">0</span></div>
+          </div>
+        </div>
+        <div class="kpis kpi3">
+          <div class="kpi"><div class="k">销售数量</div><div class="v" id="kQty">0</div></div>
+          <div class="kpi"><div class="k">毛利额</div><div class="v" id="kGross">0</div></div>
+          <div class="kpi"><div class="k">毛利率</div><div class="v" id="kRate">0%</div></div>
+          <div class="kpi"><div class="k">今日客流</div><div class="v" id="kCust">0</div></div>
+          <div class="kpi"><div class="k">今日客单价</div><div class="v" id="kAvg">0</div></div>
+          <div class="kpi"><div class="k">库存成本额</div><div class="v" id="kStock">0</div></div>
+        </div>
+      </div>
+
+      <!-- 第二行：大类 × 门店 -->
+      <div class="card flex1">
+        <h2>各大类在各门店的销售情况 <span class="tip" id="matrixTip"></span></h2>
+        <div class="tbl-wrap" id="matrixWrap"></div>
+      </div>
+    </div>
+
+    <!-- 中列 -->
+    <div class="col">
+      <div class="card">
+        <h2>各门店销售情况（实时今日） <span class="tip" id="rtTip"></span></h2>
+        <div class="stores" id="storeCards"></div>
+        <div class="kpis kpi4 mini">
+          <div class="kpi"><div class="k">会员总数</div><div class="v" id="kMember">0</div></div>
+          <div class="kpi"><div class="k">线下销售</div><div class="v" id="kOffline">0</div></div>
+          <div class="kpi"><div class="k">线上销售</div><div class="v" id="kOnline">0</div></div>
+          <div class="kpi"><div class="k">门店数</div><div class="v" id="kStores">0</div></div>
+        </div>
+      </div>
+
+      <div class="card flex1">
+        <h2>各大类销售数量与库存 <span class="tip" id="catQtyTip"></span>
+          <select id="catStore" class="sel"></select>
+        </h2>
+        <div class="tbl-wrap" id="catQtyWrap"></div>
+      </div>
+
+      <!-- 中列底部：年度月度柱状图（今年 1 月 1 日至今，每天只更新一次）
+           一根柱子 = 一个月的销售额，柱内用两种颜色分出「毛利」与「成本」 -->
+      <div class="card year-card">
+        <h2><span id="yearTitle">年度月度销售与毛利</span>
+          <span class="tip" id="yearTip"></span>
+        </h2>
+        <div class="year-legend">
+          <span><i class="lg sale"></i>销售额（整柱）</span>
+          <span><i class="lg profit"></i>毛利</span>
+          <span><i class="lg cost"></i>成本</span>
+          <span class="year-sum" id="yearSum"></span>
+        </div>
+        <div class="ychart" id="yearChart"><div class="empty">年度数据加载中…</div></div>
+      </div>
+    </div>
+
+    <!-- 右列：季节销售与库存总表（恢复完整高度） -->
+    <div class="col">
+      <div class="card flex1">
+        <h2>季节销售与库存总表 <span class="tip" id="seasonTip"></span>
+          <label class="sel-label">门店：<select id="seasonStore" class="sel"></select></label>
+          <button class="btn btn-sm" id="btnSeason">季节归类设置</button>
+        </h2>
+        <div class="tbl-wrap" id="seasonWrap"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 季节归类设置弹窗 -->
+<div class="modal-mask" id="seasonModal" style="display:none">
+  <div class="modal">
+    <div class="modal-hd">
+      <b>季节归类设置</b>
+      <span class="tip">档案里有季节的按档案；没有的按下面「关键词规则」识别。规则优先于自动识别，类别指派优先于规则</span>
+      <button class="btn btn-sm" id="seasonClose">关闭</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="tab-btn active" data-tab="rule">关键词规则</button>
+      <button class="tab-btn" data-tab="cat">类别指派</button>
+      <button class="tab-btn" data-tab="mode">季节口径</button>
+      <button class="tab-btn" data-tab="src">季节来源</button>
+    </div>
+    <div class="modal-body" id="seasonRules"><div class="empty">加载中…</div></div>
+    <div class="modal-body" id="seasonList" style="display:none"><div class="empty">加载中…</div></div>
+    <div class="modal-body" id="seasonMode" style="display:none"><div class="empty">加载中…</div></div>
+    <div class="modal-body" id="seasonSrc" style="display:none"><div class="empty">加载中…</div></div>
+    <div class="modal-ft">
+      <span class="tip" id="seasonSaveTip"></span>
+      <button class="btn btn-sm" id="seasonReset">恢复默认规则</button>
+      <button class="btn" id="seasonSave">保存并重算</button>
+    </div>
+  </div>
+</div>
+
+<!-- 季节明细追溯：点季节表里的数字，看它背后是哪些商品、季节读了哪个字段 -->
+<div class="modal-mask" id="sdModal" style="display:none">
+  <div class="modal" style="width:min(1080px,94vw)">
+    <div class="modal-hd">
+      <b id="sdTitle">季节明细</b>
+      <span class="tip" id="sdSub">下面列出构成这个数字的商品，以及它们的季节是从哪个档案字段读到的</span>
+      <button class="btn btn-sm" id="sdClose">关闭</button>
+    </div>
+    <div class="modal-body" id="sdBody"><div class="empty">加载中…</div></div>
+    <div class="modal-ft">
+      <span class="tip" id="sdTip"></span>
+    </div>
+  </div>
+</div>
+
+<!-- 界面设置：风格 / 屏幕适配 / 背景 / 运行，全部归到这一个入口 -->
+<div class="modal-mask" id="uiModal" style="display:none">
+  <div class="modal">
+    <div class="modal-hd">
+      <b>界面设置</b>
+      <span class="tip">风格、屏幕适配、背景、运行方式都在这里，选好后自动记忆</span>
+      <button class="btn btn-sm" id="uiClose">关闭</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="tab-btn active" data-uitab="theme">风格</button>
+      <button class="tab-btn" data-uitab="fit">屏幕适配</button>
+      <button class="tab-btn" data-uitab="bg">背景</button>
+      <button class="tab-btn" data-uitab="run">运行</button>
+      <button class="tab-btn" data-uitab="store">门店</button>
+      <button class="tab-btn" data-uitab="account">账号</button>
+      <button class="tab-btn" data-uitab="update">更新</button>
+    </div>
+    <div class="sg-hint" id="uiRoleHint" style="display:none;margin:8px 18px 0">
+      当前不是管理员登录：风格、屏幕适配、背景、运行（含屏保）都可以照常改；只有「增删门店、设置管理员口令、管理员工账号」需要管理员登录后才能执行。
+    </div>
+
+    <!-- 风格 -->
+    <div class="modal-body ui-pane" id="uiPaneTheme">
+      <div class="sg-hint">选一套配色，立刻生效并记住</div>
+      <div class="th-grid" id="themeGrid"></div>
+    </div>
+
+    <!-- 屏幕适配 -->
+    <div class="modal-body ui-pane" id="uiPaneFit" style="display:none">
+      <div class="sg-hint">当前屏幕 <b id="fitSize">-</b>　选大屏怎么铺开（带「推荐」的是按你这台屏幕的比例算出来的）</div>
+      <div class="fit-grid" id="fitGrid"></div>
+
+      <div class="sg-title" style="margin-top:14px">字号</div>
+      <div class="ui-row" style="align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">大小</span>
+        <input class="ru-inp" id="uiScale" type="range" min="80" max="160" step="5" value="100" style="flex:1" />
+        <span class="sg-hint" id="uiScaleVal" style="margin:0;white-space:nowrap">100%</span>
+        <label class="ui-sw"><input type="checkbox" id="uiScaleAuto" checked> 自动</label>
+      </div>
+      <div class="sg-hint" id="uiScaleHint" style="margin:6px 0 0"></div>
+    </div>
+
+    <!-- 背景 -->
+    <div class="modal-body ui-pane" id="uiPaneBg" style="display:none">
+      <div class="sg-hint">选一个背景后，下面的「压暗程度」可以调节底图深浅，保证数据看得清</div>
+      <div class="th-grid" id="bgGrid"></div>
+
+      <div class="ui-row" style="margin-top:10px;align-items:center">
+        <button class="btn" id="bgUpload">上传我的图片…</button>
+        <button class="btn btn-sm" id="bgRemove">移除我的图片</button>
+        <input type="file" id="bgFile" accept="image/*" style="display:none" />
+        <span class="sg-hint" style="margin:0">支持 jpg / png，会自动压到合适大小</span>
+      </div>
+
+      <div class="sg-title" style="margin-top:14px">显示效果</div>
+      <div class="ui-row" style="align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">压暗程度</span>
+        <input class="ru-inp" id="bgMask" type="range" min="0" max="90" step="5" value="62" style="flex:1" />
+        <span class="sg-hint" style="margin:0;white-space:nowrap">越高数字越清楚</span>
+      </div>
+      <div class="ui-row" style="margin-top:6px;align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">背景模糊</span>
+        <input class="ru-inp" id="bgBlur" type="range" min="0" max="12" step="1" value="2" style="flex:1" />
+        <span class="sg-hint" style="margin:0;white-space:nowrap">越大越柔和</span>
+      </div>
+      <div class="ui-row" style="margin-top:6px;align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">铺满方式</span>
+        <select id="bgFit" class="sel" style="flex:0 0 190px">
+          <option value="cover">铺满屏幕（可能裁掉边缘）</option>
+          <option value="contain">完整显示（可能留黑边）</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 运行 -->
+    <div class="modal-body ui-pane" id="uiPaneRun" style="display:none">
+      <div class="sg-hint">大屏在后台运行取数，任务栏没有窗口。下面这几项决定它「能不能一直跑」。</div>
+      <div class="run-list">
+        <div class="run-item">
+          <div class="run-t">开机自动启动 + 后台守护<span class="run-tag" id="runTag">检查中…</span></div>
+          <div class="run-d">电脑开机自动在后台跑；中途被关掉或崩了，计划任务最多 5 分钟自动拉回来。默认开启，不建议关。</div>
+          <label class="ui-sw"><input type="checkbox" id="uiBoot" checked> 启用（开机自启 + 每 5 分钟守护）</label>
+        </div>
+        <div class="run-item">
+          <div class="run-t">自动轮播</div>
+          <div class="run-d">每 15 秒自动切换一个时间档（实时 / 昨天 / 本周 / 本月 / 上月）。默认关闭，需要无人值守轮播时再开。</div>
+          <label class="ui-sw"><input type="checkbox" id="uiAuto"> 开启自动轮播</label>
+        </div>
+        <div class="run-item">
+          <div class="run-t">抓取策略<span class="run-tag" id="fetchTag">读取中…</span></div>
+          <div class="run-d">厂家服务器对密集请求会告警，所以取数收着来：只在营业时段自动取数，历史档（昨日 / 本周 / 本月）每天只拉一次，全程限速。</div>
+          <div class="ui-row" style="align-items:center;margin-top:6px">
+            <span class="ru-tag" style="background:var(--accent)">营业时段</span>
+            <input class="ru-inp" id="fpOpen" type="time" style="flex:0 0 116px" />
+            <span style="opacity:.75">至</span>
+            <input class="ru-inp" id="fpClose" type="time" style="flex:0 0 116px" />
+            <span class="sg-hint" style="margin:0">这个时段之外不自动联网</span>
+          </div>
+          <div class="ui-row" style="align-items:center;margin-top:6px">
+            <span class="ru-tag" style="background:var(--accent2)">今日刷新</span>
+            <input class="ru-inp" id="fpToday" type="number" min="1" max="120" style="flex:0 0 84px" />
+            <span class="sg-hint" style="margin:0">分钟一次（仅在营业时段内生效）</span>
+          </div>
+          <div class="ui-row" style="align-items:center;margin-top:6px">
+            <span class="ru-tag" style="background:var(--accent2)">对外限速</span>
+            <input class="ru-inp" id="fpRate" type="number" min="5" max="600" style="flex:0 0 84px" />
+            <span class="sg-hint" style="margin:0">个请求 / 分钟（硬上限，手动刷新也不会超）</span>
+          </div>
+          <label class="ui-sw"><input type="checkbox" id="fpHistory" checked> 历史档每天只拉一次（昨日 / 本周 / 本月）</label>
+          <label class="ui-sw"><input type="checkbox" id="fpQuiet" checked> 闭店后不再自动联网（只呈现最后一份数据）</label>
+          <div class="ui-row" style="margin-top:6px">
+            <button class="btn btn-sm" id="fpSave">保存策略</button>
+            <span class="sg-hint" style="margin:0" id="fpStat"></span>
+          </div>
+        </div>
+        <div class="run-item">
+          <div class="run-t">屏保</div>
+          <div class="run-d">把大屏装成系统屏保，电脑闲置时自动全屏播放经营数据。</div>
+          <button class="btn btn-sm" id="uiSaver">屏保设置…</button>
+        </div>
+      </div>
+      <div class="ui-row" style="margin-top:10px">
+        <button class="btn btn-sm" id="uiQuit">退出大屏服务</button>
+        <button class="btn btn-sm" id="uiDoctor">环境自检</button>
+        <span class="sg-hint" style="margin:0">退出后守护会在 5 分钟内把它拉回来；要彻底停用请先关掉上面的开关。</span>
+      </div>
+      <div id="doctorBox" class="run-list" style="margin-top:8px;display:none"></div>
+      <div class="sg-hint" id="verLine" style="margin-top:10px">版本读取中…</div>
+    </div>
+
+    <!-- 门店：以后开新店只在这里填一次，不用再改程序 -->
+    <div class="modal-body ui-pane" id="uiPaneStore" style="display:none">
+      <div class="sg-hint">新增门店只需填 4 项：商户ID、登录账号、密码、屏幕上的名字。保存后自动开始取数，门口的独立网址也一并生成。</div>
+      <div id="branchList" class="run-list"></div>
+
+      <div class="sg-title" style="margin-top:14px" id="branchFormTitle">新增门店</div>
+      <div class="ui-row" style="align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">商户ID</span>
+        <input class="ru-inp" id="brCode" placeholder="零售云平台后台的 8 位商户编号" style="flex:1" />
+        <span class="ru-tag" style="background:var(--accent2)">账号</span>
+        <input class="ru-inp" id="brUser" value="9999" style="flex:0 0 110px" />
+      </div>
+      <div class="ui-row" style="margin-top:6px;align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">密码</span>
+        <input class="ru-inp" id="brPass" type="password" placeholder="后台登录密码" style="flex:1" />
+        <span class="ru-tag" style="background:var(--accent2)">显示名</span>
+        <input class="ru-inp" id="brAlias" placeholder="如：某某旗舰店" style="flex:1" />
+      </div>
+      <div class="ui-row" style="margin-top:8px">
+        <button class="btn" id="brSave">测试连接并保存</button>
+        <button class="btn btn-sm" id="brCancel" style="display:none">取消编辑</button>
+        <span class="sg-hint" style="margin:0" id="brTip"></span>
+      </div>
+      <div class="sg-hint" id="brFile" style="margin-top:8px"></div>
+
+      <!-- 同步到手机 App：新增门店后生成一段文本，发到手机上粘贴导入即可，不用重新打包 App -->
+      <div class="sg-title" style="margin-top:16px">同步到手机 App</div>
+      <div class="sg-hint">
+        手机上新增门店不用重装 App：点下面按钮生成一段配置文本，用微信发到手机，
+        在手机 App 里「设置 → 粘贴导入配置」粘进去即可。<b id="msCount"></b>
+      </div>
+      <div class="ui-row" style="margin-top:6px">
+        <button class="btn btn-sm" id="msGen">生成配置（不含密码）</button>
+        <button class="btn btn-sm" id="msGenPwd">生成（含密码）</button>
+        <button class="btn btn-sm" id="msCopy">复制文本</button>
+      </div>
+      <textarea id="msText" rows="3" readonly placeholder="点上面任一按钮生成配置文本"
+        style="width:100%;margin-top:8px;padding:9px 10px;border-radius:9px;border:1px solid var(--row-b);background:var(--sel-bg);color:var(--sel-txt);font-size:12px;line-height:1.55;resize:vertical;word-break:break-all"></textarea>
+      <div class="sg-hint" id="msTip" style="margin-top:6px"></div>
+    </div>
+
+    <!-- 账号：谁能看这块屏 -->
+    <div class="modal-body ui-pane" id="uiPaneAccount" style="display:none">
+      <div class="run-list">
+        <div class="run-item">
+          <div class="run-t">管理员密码<span class="run-tag" id="admTag">未设置</span></div>
+          <div class="run-d"><b>看数据永远不需要登录。</b>管理员口令只用来保护「增删门店、改设置」这些管理操作。忘了口令也没关系，在这台大屏机上点「本机清除」即可恢复。</div>
+          <div class="ui-row" style="align-items:center">
+            <span class="ru-tag" style="background:var(--accent)">新口令</span>
+            <input class="ru-inp" id="admPass" type="password" placeholder="留空并保存 = 取消口令" style="flex:1" />
+            <button class="btn btn-sm" id="admSave">保存</button>
+            <button class="btn btn-sm" id="admReset">本机清除</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sg-title" style="margin-top:14px">员工账号</div>
+      <div class="sg-hint">门店其实不用在这里建：店长在右上角「登录 → 门店登录」里输入本店的商户ID + 零售云平台账号密码，就会自动建好并锁定本店。这里可以手工补建、改密码或删除。</div>
+      <div id="userList" class="run-list"></div>
+
+      <div class="sg-title" style="margin-top:14px" id="userFormTitle">新增账号</div>
+      <div class="ui-row" style="align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">账号</span>
+        <input class="ru-inp" id="usName" placeholder="登录用的账号，如 xiang01" style="flex:1" />
+        <span class="ru-tag" style="background:var(--accent2)">姓名</span>
+        <input class="ru-inp" id="usDisp" placeholder="真实姓名/称呼" style="flex:1" />
+      </div>
+      <div class="ui-row" style="margin-top:6px;align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">密码</span>
+        <input class="ru-inp" id="usPass" type="password" placeholder="留空表示不改" style="flex:1" />
+        <span class="ru-tag" style="background:var(--accent2)">看哪家店</span>
+        <select class="sel" id="usStore" style="flex:1"><option value="">全部（等同管理员）</option></select>
+      </div>
+      <div class="ui-row" style="margin-top:8px">
+        <button class="btn" id="usSave">保存账号</button>
+        <button class="btn btn-sm" id="usCancel" style="display:none">取消编辑</button>
+        <span class="sg-hint" style="margin:0" id="usTip"></span>
+      </div>
+    </div>
+
+    <!-- 更新：自动检查 + 安装，主源 Gitee、取不到自动换 GitHub -->
+    <div class="modal-body ui-pane" id="uiPaneUpdate" style="display:none">
+      <div class="sg-hint">有新版本时程序会自己下载并安装（装完自动重启一次，约半分钟）。装之前会把当前这版备份好，出问题可以一键退回。</div>
+      <div class="run-list">
+        <div class="run-item">
+          <div class="run-t">自动检查更新<span class="run-tag" id="upTag">读取中…</span></div>
+          <div class="run-d">每天打开大屏时检查一次（不重复打扰）。安装源优先 Gitee，取不到自动换 GitHub。</div>
+          <label class="ui-sw"><input type="checkbox" id="upAuto" checked> 启用自动检查与安装</label>
+        </div>
+      </div>
+
+      <div class="sg-title" style="margin-top:14px">当前版本</div>
+      <div class="ui-row" style="align-items:center">
+        <span class="ru-tag" style="background:var(--accent)">版本</span>
+        <span class="ru-inp" id="upVer" style="flex:0 0 auto;min-width:120px">-</span>
+        <span class="ru-tag" style="background:var(--accent2)">上次检查</span>
+        <span class="ru-inp" id="upLast" style="flex:1">-</span>
+      </div>
+      <div class="ui-row" style="margin-top:8px">
+        <button class="btn" id="upCheck">立即检查更新</button>
+        <button class="btn" id="upInstall">安装最新更新</button>
+        <button class="btn btn-sm" id="upRollback" style="display:none">回滚上一版</button>
+        <span class="sg-hint" style="margin:0" id="upTip"></span>
+      </div>
+      <div id="upProgress" style="display:none;margin-top:8px">
+        <div class="up-bar"><i id="upBar" style="width:0%"></i></div>
+        <div class="sg-hint" id="upPhase" style="margin:4px 0 0"></div>
+      </div>
+      <div class="sg-title" style="margin-top:14px">更新内容</div>
+      <pre class="up-log" id="upLog">暂无</pre>
+      <div class="sg-hint" id="upErr" style="margin-top:8px;color:var(--warn,#e08a4a)"></div>
+    </div>
+
+    <div class="modal-ft">
+      <span class="tip" id="uiTip"></span>
+    </div>
+  </div>
+</div>
+
+<!-- 登录：门店用零售云平台账号登录＝自动接入；管理员看全部。登录一次本机记住 -->
+<div class="modal-mask" id="loginModal" style="display:none">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-hd">
+      <b>登录大屏</b>
+      <span class="tip">看数据不需要登录；登录是为了接入门店 / 获得管理权限</span>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" style="margin-bottom:10px">
+        <button class="tab-btn active" data-lgmode="store">门店登录</button>
+        <button class="tab-btn" data-lgmode="admin">管理员</button>
+      </div>
+
+      <div id="lgPaneStore">
+        <div class="ui-row" style="align-items:center">
+          <span class="ru-tag" style="background:var(--accent)">商户ID</span>
+          <input class="ru-inp" id="lgTenant" placeholder="零售云平台的 8 位商户号，如 10000001" style="flex:1" />
+        </div>
+        <div class="ui-row" style="margin-top:8px;align-items:center">
+          <span class="ru-tag" style="background:var(--accent)">账号</span>
+          <input class="ru-inp" id="lgAccount" placeholder="9999" autocomplete="username" style="flex:1" />
+        </div>
+        <div class="ui-row" style="margin-top:8px;align-items:center">
+          <span class="ru-tag" style="background:var(--accent2)">密码</span>
+          <input class="ru-inp" id="lgPass" type="password" autocomplete="current-password" style="flex:1" />
+        </div>
+        <div class="sg-hint" style="margin-top:10px">
+          用这家店在零售云平台系统里的账号登录。<b>新店第一次登录＝自动接进大屏</b>，之后这台电脑免登录，打开就只看本店数据。
+        </div>
+      </div>
+
+      <div id="lgPaneAdmin" style="display:none">
+        <div class="ui-row" style="align-items:center">
+          <span class="ru-tag" style="background:var(--accent)">账号</span>
+          <input class="ru-inp" id="lgUser" value="admin" autocomplete="username" style="flex:1" />
+        </div>
+        <div class="ui-row" style="margin-top:8px;align-items:center">
+          <span class="ru-tag" style="background:var(--accent)">密码</span>
+          <input class="ru-inp" id="lgAdminPass" type="password" autocomplete="current-password" style="flex:1" />
+        </div>
+        <div class="sg-hint" style="margin-top:10px">
+          管理员账号 admin 可以看全部门店、增减门店、改设置。没设过密码时密码留空直接登录。
+        </div>
+      </div>
+
+      <div class="ui-row" style="margin-top:10px;align-items:center">
+        <label class="ui-sw"><input type="checkbox" id="lgRemember" checked> 记住这台电脑（下次免登录）</label>
+      </div>
+      <div class="sg-hint" id="lgTip" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-ft">
+      <span class="tip" id="lgHint"></span>
+      <button class="btn" id="lgGo">登录</button>
+    </div>
+  </div>
+</div>
+
+<!-- 门店入口：每个门店一个独立网址，打开即只看本店 -->
+<div class="modal-mask" id="entryModal" style="display:none">
+  <div class="modal">
+    <div class="modal-hd">
+      <b>门店入口</b>
+      <span class="tip">每个门店一个独立网址，打开即只看本店数据；可复制发给门店，或在桌面建快捷方式</span>
+      <button class="btn btn-sm" id="entryClose">关闭</button>
+    </div>
+    <div class="modal-body">
+      <div class="sg-hint" id="entryHint">加载中…</div>
+      <div id="entryList"></div>
+    </div>
+    <div class="modal-ft">
+      <span class="tip" id="entryTip"></span>
+      <button class="btn btn-sm" id="entryFolder">在程序旁生成全部入口</button>
+      <button class="btn" id="entryDone">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 屏保 -->
+<div class="modal-mask" id="saverModal" style="display:none">
+  <div class="modal">
+    <div class="modal-hd">
+      <b>屏保 / 空闲全屏</b>
+      <span class="tip">没人操作时自动铺满全屏展示经营数据</span>
+      <button class="btn btn-sm" id="saverClose">回到界面设置</button>
+    </div>
+    <div class="modal-body" id="saverBody">
+      <div class="empty">加载中…</div>
+    </div>
+    <div class="modal-ft">
+      <span class="tip" id="saverTip"></span>
+      <button class="btn btn-sm" id="saverClose">关闭</button>
+    </div>
+  </div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

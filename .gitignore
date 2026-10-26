@@ -1,0 +1,39 @@
+# ============ 绝不入库：账号密码 / 凭据 / 运行数据 / 大文件 ============
+
+# 门店账号配置（含真实商户ID、账号、密码）—— 请由 config.example.js 自行生成
+pc/config.js
+config.js
+config.local.js
+**/config.local.js
+config.json
+**/config.json
+
+# 运行数据与会话缓存（含登录令牌）
+data/
+**/data/
+**/session-*.json
+
+# 构建产物与分发包
+dist/
+**/dist/
+*.exe
+*.zip
+发布包/
+**/发布包/
+**/out/
+**/assets/www/
+**/release.keystore
+**/*.idsig
+**/*.apk
+
+# 日志
+**/*.log
+运行日志.txt
+
+# 依赖
+node_modules/
+**/node_modules/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
